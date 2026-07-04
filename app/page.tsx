@@ -1,19 +1,258 @@
 'use client'
-import {useEffect,useMemo,useState} from 'react'
+
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import {supabase} from '@/lib/supabase'
-import {Category,Match,Registration,categoryLimits,cats,defaultMatches} from '@/lib/fixtures'
-import {ScheduleTable} from '@/components/schedule/ScheduleTable'
-import {Standings} from '@/components/standings/Standings'
-import {PublicStats} from '@/components/stats/PublicStats'
-export default function Home(){const [tab,setTab]=useState('inicio'); const [regs,setRegs]=useState<Registration[]>([]); const [matches,setMatches]=useState<Match[]>(defaultMatches()); const [form,setForm]=useState<any>({category:'Plata'}); const [msg,setMsg]=useState('')
-useEffect(()=>{load()},[]); async function load(){if(!supabase)return; const [{data:r},{data:m}]=await Promise.all([supabase.from('registrations').select('*').order('created_at'),supabase.from('matches').select('*').order('day').order('start_time')]); if(r)setRegs(r as any); if(m&&m.length)setMatches(m as any)}
-const counts=useMemo(()=>Object.fromEntries(cats.map(c=>[c,regs.filter(r=>r.category===c).length])) as Record<Category,number>,[regs]); const full=cats.every(c=>counts[c]>=categoryLimits[c])
-async function submit(e:any){e.preventDefault(); if(!supabase)return setMsg('Falta conectar Supabase en .env.local.'); const cat=form.category as Category; if(counts[cat]>=categoryLimits[cat])return setMsg('Esa categoría ya está completa.'); const {error}=await supabase.from('registrations').insert({...form,paid:false}); setMsg(error?'No se pudo inscribir. Revisa Supabase.':'Inscripción enviada. Recuerda hacer Bizum y estar pendiente de la web.'); if(!error){setForm({category:'Plata'});load()}}
-return <main><header className="top"><b>VI Edición Torneo Pádel</b><nav>{['inicio','inscripcion','horarios','grupos','estadisticas'].map(x=><button key={x} onClick={()=>setTab(x)} className={tab===x?'on':''}>{x}</button>)}</nav><Link className="adminDot" href="/admin" title=""></Link></header>
-{tab==='inicio'&&<section className="hero"><div><p className="kicker">21 · 22 agosto · La Coma</p><h1>Sexta Edición<br/><span>Torneo Pádel</span></h1><p>Inscripciones, horarios, grupos, resultados y estadísticas actualizadas durante todo el torneo.</p><button onClick={()=>setTab('inscripcion')}>Apuntarse</button></div><div className="countBox">{cats.map(c=><div key={c}><b>{c}</b><span>{counts[c]}/{categoryLimits[c]}</span><i style={{width:`${Math.min(100,counts[c]/categoryLimits[c]*100)}%`}}/></div>)}</div></section>}
-{tab==='inscripcion'&&<section className="page two"><div className="card"><h2>Inscripción por pareja</h2>{full?<div className="closed"><b>Inscripciones cerradas</b><span>Ya se han completado todas las plazas del torneo.</span></div>:<form onSubmit={submit} className="form"><label>Jugador/a 1<input required value={form.player1||''} onChange={e=>setForm({...form,player1:e.target.value})}/></label><label>Jugador/a 2<input required value={form.player2||''} onChange={e=>setForm({...form,player2:e.target.value})}/></label><label>WhatsApp de contacto<input required value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})} placeholder="Ej: 612345678"/></label><label>Categoría<select value={form.category} onChange={e=>setForm({...form,category:e.target.value})}>{cats.map(c=><option key={c} disabled={counts[c]>=categoryLimits[c]}>{c}</option>)}</select></label><label>Notas<textarea value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})} placeholder="Nivel, disponibilidad, dudas..."/></label><button>Enviar inscripción</button>{msg&&<p className="notice">{msg}</p>}</form>}</div>{!full&&<div className="card rules"><h2>Pago y normas</h2><div className="bizum"><small>Bizum inscripción</small><b>699 77 60 68</b><span>Precio: 5 € por persona. Incluye un bote de pelotas nuevo.</span></div><ul><li>Solo se apunta una persona por pareja.</li><li>Al menos un miembro debe ser de La Coma.</li><li>El pago se realiza por Bizum después de enviar la inscripción.</li><li>Cualquier duda, escribe por WhatsApp.</li><li>Estad pendientes de la web: horarios, cambios, resultados y próximos partidos se actualizarán aquí.</li></ul></div>}</section>}
-{tab==='horarios'&&<section className="page wide"><h2>Horarios oficiales</h2><ScheduleTable matches={matches} regs={regs}/></section>}
-{tab==='grupos'&&<section className="page"><h2>Fase de grupos</h2><p className="muted">Cada categoría está dividida por grupos. DJ significa diferencia de juegos.</p><Standings regs={regs} matches={matches}/></section>}
-{tab==='estadisticas'&&<section className="page"><h2>Estadísticas generales</h2><p className="muted">Esta parte es lo que ve la gente: rankings generales del torneo, pareja con más juegos, mejor diferencia y más victorias.</p><PublicStats regs={regs} matches={matches}/></section>}
-</main>}
+import { supabase } from '@/lib/supabase'
+import {
+  Category,
+  Match,
+  Registration,
+  categoryLimits,
+  cats,
+  defaultMatches,
+} from '@/lib/fixtures'
+import { ScheduleTable } from '@/components/schedule/ScheduleTable'
+import { Standings } from '@/components/standings/Standings'
+import { PublicStats } from '@/components/stats/PublicStats'
+
+export default function Home() {
+  const [tab, setTab] = useState('inicio')
+  const [regs, setRegs] = useState<Registration[]>([])
+  const [matches, setMatches] = useState<Match[]>(defaultMatches())
+  const [form, setForm] = useState<any>({ category: 'Plata' })
+  const [msg, setMsg] = useState('')
+  const [settings, setSettings] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    load()
+
+    const interval = setInterval(load, 15000)
+    return () => clearInterval(interval)
+  }, [])
+
+  async function load() {
+    if (!supabase) return
+
+    const [{ data: r }, { data: m }, { data: s }] = await Promise.all([
+      supabase.from('registrations').select('*').order('created_at'),
+      supabase.from('matches').select('*').order('day').order('start_time'),
+      supabase.from('settings').select('*'),
+    ])
+
+    if (r) setRegs(r as any)
+    if (m && m.length) setMatches(m as any)
+    if (s) setSettings(Object.fromEntries(s.map((x: any) => [x.key, x.value])))
+  }
+
+  const counts = useMemo(
+    () =>
+      Object.fromEntries(
+        cats.map(c => [c, regs.filter(r => r.category === c).length])
+      ) as Record<Category, number>,
+    [regs]
+  )
+
+  const full = cats.every(c => counts[c] >= categoryLimits[c])
+  const availableCats = cats.filter(c => counts[c] < categoryLimits[c])
+
+  async function submit(e: any) {
+    e.preventDefault()
+
+    if (!supabase) return setMsg('Falta conectar Supabase en .env.local.')
+
+    const cat = form.category as Category
+
+    if (counts[cat] >= categoryLimits[cat]) {
+      return setMsg('Esa categoría ya está completa.')
+    }
+
+    const { error } = await supabase
+      .from('registrations')
+      .insert({ ...form, paid: false })
+
+    setMsg(
+      error
+        ? 'No se pudo inscribir. Revisa Supabase.'
+        : 'Inscripción enviada. Recuerda hacer Bizum y estar pendiente de la web.'
+    )
+
+    if (!error) {
+      setForm({ category: availableCats[0] || 'Plata' })
+      load()
+    }
+  }
+
+  return (
+    <main>
+      <header className="top">
+        <b>{settings.site_title || 'VI Edición Torneo Pádel'}</b>
+
+        <nav>
+          {['inicio', 'inscripcion', 'horarios', 'grupos', 'estadisticas'].map(x => (
+            <button
+              key={x}
+              onClick={() => setTab(x)}
+              className={tab === x ? 'on' : ''}
+            >
+              {x}
+            </button>
+          ))}
+        </nav>
+
+        <Link className="adminDot" href="/admin" title="" />
+      </header>
+
+      {tab === 'inicio' && (
+        <section className="hero">
+          <div>
+            <p className="kicker">
+              {settings.site_subtitle || '21 · 22 agosto · La Coma'}
+            </p>
+
+            <h1>{settings.site_title || 'VI Edición Torneo Pádel'}</h1>
+
+            <p>
+              {settings.hero_text ||
+                'Inscripciones, horarios, grupos, resultados y estadísticas actualizadas durante todo el torneo.'}
+            </p>
+
+            <button onClick={() => setTab('inscripcion')}>Apuntarse</button>
+          </div>
+
+          <div className="countBox">
+            {cats.map(c => (
+              <div key={c}>
+                <b>{c}</b>
+                <span>
+                  {counts[c]}/{categoryLimits[c]}
+                </span>
+                <i
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      (counts[c] / categoryLimits[c]) * 100
+                    )}%`,
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {tab === 'inscripcion' && (
+        <section className="page two">
+          <div className="card">
+            <h2>Inscripción por pareja</h2>
+
+            {full ? (
+              <div className="closed">
+                <b>Inscripciones cerradas</b>
+                <span>Ya se han completado todas las plazas del torneo.</span>
+              </div>
+            ) : (
+              <form onSubmit={submit} className="form">
+                <label>
+                  Jugador/a 1
+                  <input
+                    required
+                    value={form.player1 || ''}
+                    onChange={e => setForm({ ...form, player1: e.target.value })}
+                  />
+                </label>
+
+                <label>
+                  Jugador/a 2
+                  <input
+                    required
+                    value={form.player2 || ''}
+                    onChange={e => setForm({ ...form, player2: e.target.value })}
+                  />
+                </label>
+
+                <label>
+                  WhatsApp de contacto
+                  <input
+                    required
+                    value={form.phone || ''}
+                    onChange={e => setForm({ ...form, phone: e.target.value })}
+                    placeholder="Ej: 612345678"
+                  />
+                </label>
+
+                <label>
+                  Categoría
+                  <select
+                    value={form.category}
+                    onChange={e => setForm({ ...form, category: e.target.value })}
+                  >
+                    {availableCats.map(c => (
+                      <option key={c}>{c}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  Notas
+                  <textarea
+                    value={form.notes || ''}
+                    onChange={e => setForm({ ...form, notes: e.target.value })}
+                    placeholder="Nivel, disponibilidad, dudas..."
+                  />
+                </label>
+
+                <button>Enviar inscripción</button>
+
+                {msg && <p className="notice">{msg}</p>}
+              </form>
+            )}
+          </div>
+
+          {!full && (
+            <div className="card rules">
+              <h2>Pago y normas</h2>
+
+              <div className="bizum">
+                <small>Bizum inscripción</small>
+                <b>699 77 60 68</b>
+                <span>Precio: 5 € por persona. Incluye un bote de pelotas nuevo.</span>
+              </div>
+
+              <p>
+                {settings.rules_text ||
+                  'Para apuntarse hace falta que un miembro de la pareja sea de La Coma. La inscripción vale 5€ por pareja e incluye un bote de pelotas nuevo.'}
+              </p>
+            </div>
+          )}
+        </section>
+      )}
+
+      {tab === 'horarios' && (
+        <section className="page wide">
+          <h2>Horarios oficiales</h2>
+          <ScheduleTable matches={matches} regs={regs} />
+        </section>
+      )}
+
+      {tab === 'grupos' && (
+        <section className="page">
+          <h2>Fase de grupos</h2>
+          <p className="muted">
+            Cada categoría está dividida por grupos. DJ significa diferencia de juegos.
+          </p>
+          <Standings regs={regs} matches={matches} />
+        </section>
+      )}
+
+      {tab === 'estadisticas' && (
+        <section className="page">
+          <h2>Estadísticas generales</h2>
+          <p className="muted">
+            Ranking general del torneo, pareja con más juegos, mejor diferencia y más victorias.
+          </p>
+          <PublicStats regs={regs} matches={matches} />
+        </section>
+      )}
+    </main>
+  )
+}

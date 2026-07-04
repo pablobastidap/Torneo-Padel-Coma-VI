@@ -67,3 +67,22 @@
   font-size: 24px;
   cursor: pointer;
 }
+.textEdit {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.textEdit label {
+  font-weight: 800;
+}
+
+.textEdit textarea {
+  width: 100%;
+  min-height: 90px;
+  resize: vertical;
+}
+
+.textEdit button {
+  width: fit-content;
+}

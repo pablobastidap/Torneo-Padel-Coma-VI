@@ -43,6 +43,7 @@ export default function Admin() {
   const [matchFilter, setMatchFilter] = useState<MatchFilter>('pendientes')
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null)
   const [selectedMode, setSelectedMode] = useState<'horario' | 'resultado'>('resultado')
+  const [settings, setSettings] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (ok) load()
@@ -50,11 +51,13 @@ export default function Admin() {
 
   async function load() {
     if (!supabase) return setMsg('Falta Supabase en .env.local.')
-    const [{data: r}, {data: m}] = await Promise.all([
-      supabase.from('registrations').select('*').order('category').order('slot'),
-      supabase.from('matches').select('*').order('day').order('start_time'),
-    ])
+    const [{data: r}, {data: m}, {data: s}] = await Promise.all([
+  supabase.from('registrations').select('*').order('category').order('slot'),
+  supabase.from('matches').select('*').order('day').order('start_time'),
+  supabase.from('settings').select('*'),
+])
     if (r) setRegs(r as any)
+      if (s) setSettings(Object.fromEntries(s.map((x: any) => [x.key, x.value])))
 if (m && m.length) {
   setMatches(m as any)
 } else {
@@ -82,6 +85,17 @@ if (m && m.length) {
     await supabase.from('registrations').delete().eq('id', id)
     load()
   }
+
+  async function saveSetting(key: string, value: string) {
+  if (!supabase) return
+
+  const { error } = await supabase
+    .from('settings')
+    .upsert({ key, value }, { onConflict: 'key' })
+
+  setMsg(error ? `Error guardando texto: ${error.message}` : 'Texto guardado.')
+  await load()
+}
 
   async function saveMatch(m: Match) {
 setMsg('Guardando partido...')
@@ -215,7 +229,7 @@ function exportMatchesCSV() {
       {msg && <p className="notice">{msg}</p>}
 
       <nav className="adminTabs">
-        {['parejas', 'horarios', 'resultados', 'whatsapp', 'estadisticas', 'ayuda'].map(x => (
+        {['parejas', 'horarios', 'resultados', 'whatsapp', 'estadisticas', 'textos', 'ayuda'].map(x => (
           <button key={x} onClick={() => setSection(x)} className={section === x ? 'on' : ''}>{x}</button>
         ))}
       </nav>
@@ -312,6 +326,30 @@ function exportMatchesCSV() {
       )}
 
       {section === 'estadisticas' && <section><PublicStats regs={regs} matches={matches} /></section>}
+      {section === 'textos' && (
+  <section className="card">
+    <h2>Textos de la web</h2>
+    <p className="muted">Cambia títulos, subtítulos y normas sin tocar código.</p>
+
+    {[
+  ['site_title', 'Título principal'],
+  ['site_subtitle', 'Subtítulo'],
+  ['hero_text', 'Texto de portada'],
+  ['rules_text', 'Normas e inscripción'],
+].map(([key, label]) => (
+  <div className="textEdit" key={key}>
+    <label>{label}</label>
+    <textarea
+      value={settings[key] || ''}
+      onChange={e => setSettings({...settings, [key]: e.target.value})}
+    />
+    <button onClick={() => saveSetting(key, settings[key] || '')}>
+      Guardar
+    </button>
+  </div>
+))}
+  </section>
+)}
       {section === 'ayuda' && <Help />}
       {selectedMatch && (
   <div className="modalBackdrop" onClick={() => setSelectedMatch(null)}>

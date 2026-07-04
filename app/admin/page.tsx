@@ -55,7 +55,11 @@ export default function Admin() {
       supabase.from('matches').select('*').order('day').order('start_time'),
     ])
     if (r) setRegs(r as any)
-    if (m && m.length) setMatches(m as any)
+   if (m && m.length) {
+  setMatches(m as any)
+} else {
+  await seed()
+}
   }
 
   async function seed() {
@@ -80,22 +84,100 @@ export default function Admin() {
   }
 
   async function saveMatch(m: Match) {
-    if (!supabase) return
-    const score = parseScore(m.score)
-    const winner = score?.winner === 'team1' ? m.team1 : score?.winner === 'team2' ? m.team2 : m.winner
-    const changed = {...m, winner}
-    const {error} = await supabase.from('matches').upsert(changed, {onConflict: 'fixture_id'})
+setMsg('Guardando partido...')
 
-    if (!error && winner && m.next_match_id && m.next_slot) {
-      const next = matches.find(x => x.fixture_id === m.next_match_id)
-      if (next) {
-        await supabase.from('matches').upsert({...next, [m.next_slot]: winner}, {onConflict: 'fixture_id'})
-      }
+if (!supabase) {
+  setMsg('Supabase no está conectado. Revisa .env.local')
+  return
+}
+
+const score = parseScore(m.score || '')
+
+const winner =
+  score?.winner === 'team1'
+    ? m.team1
+    : score?.winner === 'team2'
+      ? m.team2
+      : m.winner || ''
+
+const payload = {
+  fixture_id: m.fixture_id,
+  day: m.day,
+  start_time: m.start_time,
+  end_time: m.end_time,
+  court: m.court,
+  stage: m.stage,
+  category: m.category,
+  group_name: m.group_name || null,
+  team1: m.team1 || '',
+  team2: m.team2 || '',
+  score: m.score || '',
+  winner,
+  next_match_id: m.next_match_id || null,
+  next_slot: m.next_slot || null,
+}
+
+const { error } = await supabase
+  .from('matches')
+  .update(payload)
+  .eq('fixture_id', m.fixture_id)
+
+if (error) {
+  console.error(error)
+  setMsg(`Error guardando partido: ${error.message}`)
+  return
+}
+
+if (winner && m.next_match_id && m.next_slot) {
+  const next = matches.find(x => x.fixture_id === m.next_match_id)
+  if (next) {
+    const { error: nextError } = await supabase
+      .from('matches')
+      .update({ [m.next_slot]: winner })
+      .eq('fixture_id', next.fixture_id)
+
+    if (nextError) {
+      console.error(nextError)
+      setMsg(`Partido guardado, pero error pasando ganador: ${nextError.message}`)
+      await load()
+      return
     }
-
-    setMsg(error ? 'Error guardando partido' : 'Partido guardado. Si tenía cruce configurado, el ganador ya aparece en el siguiente partido.')
-    load()
   }
+}
+
+setMsg('✅ Partido guardado correctamente.')
+await load()
+
+}
+
+function exportMatchesCSV() {
+  const headers = ['Día','Inicio','Final','Pista','Categoría','Fase','Pareja 1','Pareja 2','Resultado','Ganador']
+
+  const rows = matches.map(m => [
+    m.day,
+    m.start_time,
+    m.end_time,
+    m.court,
+    m.category,
+    m.stage,
+    displayTeam(m.team1, regs),
+    displayTeam(m.team2, regs),
+    m.score || '',
+    displayTeam(m.winner || '', regs),
+  ])
+
+  const csv = [headers, ...rows]
+    .map(row => row.map(cell => `"${String(cell).replaceAll('"', '""')}"`).join(','))
+    .join('\n')
+
+  const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'})
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'resultados-torneo-padel.csv'
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
   if (!ok) {
     return (
@@ -125,7 +207,8 @@ export default function Admin() {
         </div>
         <div className="adminActions">
           <button onClick={seed}>Restaurar horarios base</button>
-          <Link href="/">Ver web</Link>
+<button onClick={exportMatchesCSV}>Exportar CSV</button>
+<Link href="/">Ver web</Link>
         </div>
       </header>
 

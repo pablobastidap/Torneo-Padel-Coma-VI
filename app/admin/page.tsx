@@ -41,6 +41,8 @@ export default function Admin() {
   const [matches, setMatches] = useState<Match[]>(defaultMatches())
   const [section, setSection] = useState('parejas')
   const [matchFilter, setMatchFilter] = useState<MatchFilter>('pendientes')
+  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null)
+  const [selectedMode, setSelectedMode] = useState<'horario' | 'resultado'>('resultado')
 
   useEffect(() => {
     if (ok) load()
@@ -162,7 +164,18 @@ export default function Admin() {
           <div className="editorList">
             {visibleMatches.length === 0 && <p className="notice">No hay partidos en este filtro.</p>}
             {visibleMatches.map((m, i) => (
-              <MatchEditor key={`${m.fixture_id}-${m.day}-${m.start_time}-${m.court}-${i}`} mode="horario" m={m} regs={regs} matches={matches} targets={targetOptions} onSave={saveMatch} />
+              <button
+  key={`${m.fixture_id}-${m.day}-${m.start_time}-${m.court}-${i}`}
+  className={`matchOpenCard ${isCompleted(m) ? 'completed' : ''}`}
+  onClick={() => {
+    setSelectedMatch(m)
+    setSelectedMode('horario')
+  }}
+>
+  <b>{matchLabel(m)}</b>
+  <span>{displayTeam(m.team1, regs)} vs {displayTeam(m.team2, regs)}</span>
+  <em>{isCompleted(m) ? 'Completado' : 'Pendiente'}</em>
+</button>
             ))}
           </div>
         </section>
@@ -181,7 +194,18 @@ export default function Admin() {
           <div className="editorList">
             {visibleMatches.filter(m => m.category !== 'Libre').length === 0 && <p className="notice">No hay partidos en este filtro.</p>}
             {visibleMatches.filter(m => m.category !== 'Libre').map((m, i) => (
-              <MatchEditor key={`res-${m.fixture_id}-${i}`} mode="resultado" m={m} regs={regs} matches={matches} targets={targetOptions} onSave={saveMatch} />
+              <button
+  key={`res-${m.fixture_id}-${i}`}
+  className={`matchOpenCard ${isCompleted(m) ? 'completed' : ''}`}
+  onClick={() => {
+    setSelectedMatch(m)
+    setSelectedMode('resultado')
+  }}
+>
+  <b>{matchLabel(m)}</b>
+  <span>{displayTeam(m.team1, regs)} vs {displayTeam(m.team2, regs)}</span>
+  <em>{m.score || (isCompleted(m) ? 'Completado' : 'Pendiente')}</em>
+</button>
             ))}
           </div>
         </section>
@@ -206,7 +230,26 @@ export default function Admin() {
 
       {section === 'estadisticas' && <section><PublicStats regs={regs} matches={matches} /></section>}
       {section === 'ayuda' && <Help />}
+      {selectedMatch && (
+  <div className="modalBackdrop" onClick={() => setSelectedMatch(null)}>
+    <div className="matchModal" onClick={e => e.stopPropagation()}>
+      <button className="modalClose" onClick={() => setSelectedMatch(null)}>×</button>
+      <MatchEditor
+        mode={selectedMode}
+        m={selectedMatch}
+        regs={regs}
+        matches={matches}
+        targets={targetOptions}
+        onSave={async m => {
+          await saveMatch(m)
+          setSelectedMatch(null)
+        }}
+      />
+    </div>
+  </div>
+)}
     </main>
+    
   )
 }
 

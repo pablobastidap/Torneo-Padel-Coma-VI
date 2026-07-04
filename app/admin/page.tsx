@@ -55,10 +55,10 @@ export default function Admin() {
       supabase.from('matches').select('*').order('day').order('start_time'),
     ])
     if (r) setRegs(r as any)
-   if (m && m.length) {
+if (m && m.length) {
   setMatches(m as any)
 } else {
-  await seed()
+  setMatches(defaultMatches())
 }
   }
 
@@ -66,7 +66,7 @@ export default function Admin() {
     if (!supabase) return
     const {error} = await supabase.from('matches').upsert(defaultMatches(), {onConflict: 'fixture_id'})
     setMsg(error ? 'Error creando horarios' : 'Horarios base creados / restaurados.')
-    load()
+    await load()
   }
 
   async function saveReg(r: Registration) {

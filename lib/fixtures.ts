@@ -9,7 +9,18 @@ export const cats:Category[]=['Oro','Plata','Infantil']
 export const adminPin='636011'
 export function pairName(r:Registration){return `${r.player1} / ${r.player2}`}
 export function slotOptions(cat:Category){return groups[cat].flatMap(g=>[1,2,3].map(n=>`${g}${n}`))}
-export function whatsapp(phone?:string){const digits=(phone||'').replace(/\D/g,''); if(digits.length<9)return ''; const n=digits.startsWith('34')?digits:'34'+digits; return `https://wa.me/${n}`}
+export function whatsapp(phone?:string){
+  const digits=(phone||'').replace(/\D/g,'')
+  if(digits.length<9)return ''
+
+  const n=digits.startsWith('34')?digits:'34'+digits
+
+  const text=encodeURIComponent(
+    'Hola! 👋 Te escribo del Torneo de Pádel de La Coma. Revisa la web porque puede haber nuevos horarios, resultados o próximos partidos actualizados: https://torneo-padel-coma.vercel.app'
+  )
+
+  return `https://wa.me/${n}?text=${text}`
+}
 export function displayTeam(code:string,regs:Registration[]){const r=regs.find(x=>x.slot===code);return r?pairName(r):code}
 export function matchLabel(m:Match){return `${m.day} · ${m.start_time} · ${m.court} · ${m.stage} · ${m.category}`}
 export function targetLabel(ms:Match[],id?:string,slot?:'team1'|'team2'){const m=ms.find(x=>x.fixture_id===id);return m?`${slot==='team2'?'Equipo 2':'Equipo 1'} de ${matchLabel(m)}`:'No pasa automáticamente'}

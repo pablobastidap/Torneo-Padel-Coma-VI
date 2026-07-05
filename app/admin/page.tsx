@@ -308,22 +308,38 @@ function exportMatchesCSV() {
         </section>
       )}
 
-      {section === 'whatsapp' && (
-        <section className="card">
-          <h2>WhatsApp</h2>
-          <p className="muted">Acceso directo al WhatsApp de cada pareja, si el número está bien escrito.</p>
-          <div className="wspGrid">
-            {regs.map(r => (
+    {section === 'whatsapp' && (
+  <section className="card">
+    <h2>WhatsApp</h2>
+    <p className="muted">
+      Contacta rápidamente con cada pareja. El mensaje ya incluye el link de la web.
+    </p>
+
+    {cats.map(cat => (
+      <div key={cat} className="wspCategory">
+        <h3>{cat}</h3>
+
+        <div className="wspGrid">
+          {regs
+            .filter(r => r.category === cat)
+            .sort((a,b) => (a.slot || '').localeCompare(b.slot || ''))
+            .map(r => (
               <div className="wspCard" key={r.id || pairName(r)}>
                 <b>{pairName(r)}</b>
                 <span>{r.category} · {r.slot || 'Sin slot'}</span>
                 <small>{r.phone}</small>
-                {whatsapp(r.phone) ? <a className="wsp" href={whatsapp(r.phone)} target="_blank">Abrir WhatsApp</a> : <em>Número no válido</em>}
+
+                {whatsapp(r.phone)
+                  ? <a className="wsp" href={whatsapp(r.phone)} target="_blank">Abrir WhatsApp</a>
+                  : <em>Número no válido</em>
+                }
               </div>
             ))}
-          </div>
-        </section>
-      )}
+        </div>
+      </div>
+    ))}
+  </section>
+)}
 
       {section === 'estadisticas' && <section><PublicStats regs={regs} matches={matches} /></section>}
       {section === 'textos' && (

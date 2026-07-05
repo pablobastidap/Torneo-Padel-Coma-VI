@@ -21,7 +21,26 @@ export function whatsapp(phone?:string){
 
   return `https://wa.me/${n}?text=${text}`
 }
-export function displayTeam(code:string,regs:Registration[]){const r=regs.find(x=>x.slot===code);return r?pairName(r):code}
+export function displayTeam(
+  code: string,
+  regs: Registration[],
+  category?: Category | 'Libre'
+) {
+  if (category && category !== 'Libre') {
+    const r = regs.find(
+      x => x.slot === code && x.category === category
+    )
+
+    if (r) return pairName(r)
+  }
+
+  if (!category || category === 'Libre') {
+  const r = regs.find(x => x.slot === code)
+  return r ? pairName(r) : code
+}
+
+return code
+}
 export function matchLabel(m:Match){return `${m.day} · ${m.start_time} · ${m.court} · ${m.stage} · ${m.category}`}
 export function targetLabel(ms:Match[],id?:string,slot?:'team1'|'team2'){const m=ms.find(x=>x.fixture_id===id);return m?`${slot==='team2'?'Equipo 2':'Equipo 1'} de ${matchLabel(m)}`:'No pasa automáticamente'}
 function clean(s:string){return s.replace(/[^A-Z0-9]+/gi,'-').replace(/^-|-$/g,'').toUpperCase()}
@@ -70,4 +89,18 @@ export function parseScore(score?:string){if(!score)return null; const nums=(sco
 export function allPairStats(regs:Registration[],matches:Match[],onlyGroups=false){return regs.map(r=>{const aliases=[r.slot,pairName(r)].filter(Boolean) as string[]; let pj=0,pg=0,pp=0,jf=0,jc=0; matches.filter(m=>m.category===r.category && (!onlyGroups||m.stage.toLowerCase().includes('grupo'))).forEach(m=>{if(!aliases.includes(m.team1)&&!aliases.includes(m.team2))return; const s=parseScore(m.score); if(!s)return; pj++; const is1=aliases.includes(m.team1); jf+=is1?s.a:s.b; jc+=is1?s.b:s.a; const won=is1?s.winner==='team1':s.winner==='team2'; if(won)pg++; else pp++}); return{slot:r.slot||'',category:r.category,name:pairName(r),pj,pg,pp,jf,jc,dj:jf-jc,pts:pg*3,winRate:pj?Math.round(pg/pj*100):0}})}
 export function statsFor(cat:Category,regs:Registration[],matches:Match[]){return slotOptions(cat).map(slot=>{const r=regs.find(x=>x.category===cat&&x.slot===slot); const name=r?pairName(r):slot; const base=allPairStats(r?[r]:[{player1:slot,player2:'',phone:'',category:cat,slot}],matches,true)[0]; return{...base,slot,name,group:slot[0]}}).sort((a,b)=>a.group.localeCompare(b.group)||b.pts-a.pts||b.dj-a.dj||b.jf-a.jf)}
 export function groupRows(cat:Category,regs:Registration[],matches:Match[],group:string){return statsFor(cat,regs,matches).filter(r=>r.group===group)}
-export function nextTargets(matches:Match[]){return matches.filter(m=>m.category!=='Libre').map(m=>({value:m.fixture_id,label:matchLabel(m)}))}
+export function nextTargets(matches: Match[]) {
+  return matches
+    .filter(
+      m =>
+        m.category !== 'Libre' &&
+        (
+          m.stage.toLowerCase().includes('semi') ||
+          m.stage.toLowerCase().includes('final')
+        )
+    )
+    .map(m => ({
+      value: m.fixture_id,
+      label: matchLabel(m),
+    }))
+}

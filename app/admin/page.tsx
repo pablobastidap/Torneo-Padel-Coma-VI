@@ -223,10 +223,10 @@ function exportMatchesCSV() {
     m.court,
     m.category,
     m.stage,
-    displayTeam(m.team1, regs),
-    displayTeam(m.team2, regs),
-    m.score || '',
-    displayTeam(m.winner || '', regs),
+    displayTeam(m.team1, regs, m.category),
+displayTeam(m.team2, regs, m.category),
+m.score || '',
+displayTeam(m.winner || '', regs, m.category),
   ])
 
   const csv = [headers, ...rows]
@@ -371,7 +371,7 @@ https://torneo-padel-coma.vercel.app`
   }}
 >
   <b>{matchLabel(m)}</b>
-  <span>{displayTeam(m.team1, regs)} vs {displayTeam(m.team2, regs)}</span>
+  <span>{displayTeam(m.team1, regs, m.category)} vs {displayTeam(m.team2, regs, m.category)}</span>
   <em>{isCompleted(m) ? 'Completado' : 'Pendiente'}</em>
 </button>
             ))}
@@ -401,7 +401,7 @@ https://torneo-padel-coma.vercel.app`
   }}
 >
   <b>{matchLabel(m)}</b>
-  <span>{displayTeam(m.team1, regs)} vs {displayTeam(m.team2, regs)}</span>
+  <span>{displayTeam(m.team1, regs, m.category)} vs {displayTeam(m.team2, regs, m.category)}</span>
   <em>{m.score || (isCompleted(m) ? 'Completado' : 'Pendiente')}</em>
 </button>
             ))}
@@ -561,7 +561,7 @@ function MatchEditor({m, regs, matches, targets, onSave, mode}: {m: Match; regs:
     <div className={`matchEdit ${String(x.category).toLowerCase()} ${completed ? 'completed' : ''}`}>
       <div className="mini">
         <b>{matchLabel(x)}</b>
-        <span>{x.category !== 'Libre' ? ` · ${displayTeam(x.team1, regs)} vs ${displayTeam(x.team2, regs)}` : ''}</span>
+        <span>{x.category !== 'Libre' ? ` · ${displayTeam(x.team1, regs, m.category)} vs ${displayTeam(x.team2, regs, m.category)}` : ''}</span>
         <em className={`statusTag ${completed ? 'done' : 'todo'}`}>{completed ? 'Completado' : 'Pendiente'}</em>
       </div>
 
@@ -579,9 +579,43 @@ function MatchEditor({m, regs, matches, targets, onSave, mode}: {m: Match; regs:
       {mode === 'resultado' && (
         <>
           <label>Resultado<input value={x.score || ''} onChange={e => setX({...x, score: e.target.value})} placeholder="Ej: 6-4 6-3" /></label>
-          <label>Ganador<select value={shownWinner} onChange={e => setX({...x, winner: e.target.value})}><option value="">Automático por resultado</option><option value={x.team1}>{displayTeam(x.team1, regs)}</option><option value={x.team2}>{displayTeam(x.team2, regs)}</option></select></label>
-          <label className="wideLabel">Pasar ganador a<select value={currentTarget} onChange={e => setTarget(e.target.value)}><option value="">No pasa automáticamente</option>{targets.filter(t => t.value !== x.fixture_id).flatMap(t => [<option key={`${t.value}-team1`} value={`${t.value}|team1`}>Equipo 1 de {t.label}</option>, <option key={`${t.value}-team2`} value={`${t.value}|team2`}>Equipo 2 de {t.label}</option>])}</select></label>
-          <p className="muted tiny">Ahora: {targetLabel(matches, x.next_match_id, x.next_slot)}</p>
+          <label>Ganador<select value={shownWinner} onChange={e => setX({...x, winner: e.target.value})}><option value="">Automático por resultado</option><option value={x.team1}>{displayTeam(x.team1, regs, m.category)}</option><option value={x.team2}>{displayTeam(x.team2, regs, m.category)}</option></select></label>
+         <label className="wideLabel">
+  Pasar ganador a
+  <select value={currentTarget} onChange={e => setTarget(e.target.value)}>
+    <option value="">No pasa automáticamente</option>
+
+    {targets
+      .filter(t => {
+        if (t.value === x.fixture_id) return false
+
+        const target = matches.find(mm => mm.fixture_id === t.value)
+        if (!target) return false
+
+        if (target.category !== x.category) return false
+        
+       const from = x.stage.toLowerCase()
+       const to = target.stage.toLowerCase()
+
+       if (from.includes('cuartos') && to.includes('semifinales')) return true
+       if (from.includes('semifinales') && to.includes('finales')) return true
+
+       return false
+      })
+      .flatMap(t => [
+        <option key={`${t.value}-team1`} value={`${t.value}|team1`}>
+          Equipo 1 de {t.label}
+        </option>,
+        <option key={`${t.value}-team2`} value={`${t.value}|team2`}>
+          Equipo 2 de {t.label}
+        </option>,
+      ])}
+  </select>
+</label>
+
+<p className="muted tiny">
+  Ahora: {targetLabel(matches, x.next_match_id, x.next_slot)}
+</p>
         </>
       )}
 

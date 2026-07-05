@@ -133,3 +133,32 @@
   letter-spacing:.08em;
   margin-bottom:12px;
 }
+
+.regEdit{
+  grid-template-columns: 1fr 1fr 1fr 130px 110px;
+}
+
+.regEdit .check{
+  grid-column: 1 / 2;
+}
+
+.regEdit button,
+.regEdit .wsp{
+  min-width: 105px;
+  white-space: nowrap;
+}
+
+.regEdit .danger,
+.regEdit .wsp{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media(min-width:1101px){
+  .regEdit button,
+  .regEdit .danger,
+  .regEdit .wsp{
+    grid-row: 2;
+  }
+}

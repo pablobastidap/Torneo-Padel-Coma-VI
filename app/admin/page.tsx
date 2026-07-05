@@ -11,6 +11,7 @@ import {
   cats,
   defaultMatches,
   displayTeam,
+  groupRows,
   matchLabel,
   nextTargets,
   pairName,
@@ -94,6 +95,54 @@ if (m && m.length) {
     .upsert({ key, value }, { onConflict: 'key' })
 
   setMsg(error ? `Error guardando texto: ${error.message}` : 'Texto guardado.')
+  await load()
+}
+
+async function updateKnockoutsFromGroups() {
+  if (!supabase) return
+
+  const first = (cat: Category, group: string) =>
+    groupRows(cat, regs, matches, group)[0]?.name || ''
+
+  const second = (cat: Category, group: string) =>
+    groupRows(cat, regs, matches, group)[1]?.name || ''
+
+  const updates = [
+    { id: 'DIA-2-09-00-09-40-PISTA-1-PLATA-CUARTOS-DE-FINAL-QF-PLATA-1', team1: first('Plata', 'A'), team2: second('Plata', 'B') },
+    { id: 'DIA-2-09-00-09-40-PISTA-2-PLATA-CUARTOS-DE-FINAL-QF-PLATA-2', team1: first('Plata', 'C'), team2: second('Plata', 'D') },
+    { id: 'DIA-2-09-45-10-25-PISTA-1-PLATA-CUARTOS-DE-FINAL-QF-PLATA-3', team1: first('Plata', 'B'), team2: second('Plata', 'A') },
+    { id: 'DIA-2-09-45-10-25-PISTA-2-PLATA-CUARTOS-DE-FINAL-QF-PLATA-4', team1: first('Plata', 'D'), team2: second('Plata', 'C') },
+
+    { id: 'DIA-2-10-30-11-10-PISTA-1-ORO-CUARTOS-DE-FINAL-QF-ORO-1', team1: first('Oro', 'A'), team2: second('Oro', 'B') },
+    { id: 'DIA-2-10-30-11-10-PISTA-2-ORO-CUARTOS-DE-FINAL-QF-ORO-2', team1: first('Oro', 'C'), team2: second('Oro', 'D') },
+    { id: 'DIA-2-11-15-11-55-PISTA-1-ORO-CUARTOS-DE-FINAL-QF-ORO-3', team1: first('Oro', 'B'), team2: second('Oro', 'A') },
+    { id: 'DIA-2-11-15-11-55-PISTA-2-ORO-CUARTOS-DE-FINAL-QF-ORO-4', team1: first('Oro', 'D'), team2: second('Oro', 'C') },
+
+    { id: 'DIA-2-16-25-16-50-PISTA-1-INFANTIL-SEMIFINALES-SF-INFANTIL-1', team1: first('Infantil', 'A'), team2: second('Infantil', 'B') },
+    { id: 'DIA-2-16-25-16-50-PISTA-2-INFANTIL-SEMIFINALES-SF-INFANTIL-2', team1: first('Infantil', 'B'), team2: second('Infantil', 'A') },
+  ]
+
+  const missing = updates.filter(u => !u.team1 || !u.team2)
+
+  if (missing.length) {
+    setMsg('Faltan resultados de grupos. Revisa que todos los partidos de fase de grupos tengan resultado.')
+    return
+  }
+
+  for (const u of updates) {
+    const { error } = await supabase
+      .from('matches')
+      .update({ team1: u.team1, team2: u.team2 })
+      .eq('fixture_id', u.id)
+
+    if (error) {
+      console.error(error)
+      setMsg(`Error actualizando eliminatorias: ${error.message}`)
+      return
+    }
+  }
+
+  setMsg('Eliminatorias actualizadas desde la fase de grupos.')
   await load()
 }
 
@@ -193,6 +242,57 @@ function exportMatchesCSV() {
   URL.revokeObjectURL(url)
 }
 
+function pairStage(r: Registration) {
+  const name = pairName(r)
+  const identifiers = [r.slot, name].filter(Boolean)
+
+  const wonFinal = matches.some(m =>
+    m.stage.toLowerCase().includes('final') &&
+    m.winner &&
+    identifiers.includes(m.winner)
+  )
+
+  const inFinal = matches.some(m =>
+    m.stage.toLowerCase().includes('final') &&
+    (identifiers.includes(m.team1) || identifiers.includes(m.team2))
+  )
+
+  const inSemi = matches.some(m =>
+    m.stage.toLowerCase().includes('semi') &&
+    (identifiers.includes(m.team1) || identifiers.includes(m.team2))
+  )
+
+  const inCuartos = matches.some(m =>
+    m.stage.toLowerCase().includes('cuartos') &&
+    (identifiers.includes(m.team1) || identifiers.includes(m.team2))
+  )
+
+  if (wonFinal) return 'Campeones'
+  if (inFinal) return 'Finalistas'
+  if (inSemi) return 'Semifinalistas'
+  if (inCuartos) return 'Cuartos'
+  return 'Fase de grupos'
+}
+
+function whatsappMsg(r: Registration) {
+  const stage = pairStage(r)
+
+  const text = `Hola ${pairName(r)}! 👋
+
+Os escribo del Torneo de Pádel de La Coma.
+
+Estado actual: ${stage}
+
+Revisad la web porque puede haber nuevos horarios, resultados o próximos partidos actualizados:
+https://torneo-padel-coma.vercel.app`
+
+  const digits = (r.phone || '').replace(/\D/g, '')
+  if (digits.length < 9) return ''
+
+  const n = digits.startsWith('34') ? digits : '34' + digits
+  return `https://wa.me/${n}?text=${encodeURIComponent(text)}`
+}
+
   if (!ok) {
     return (
       <main className="login">
@@ -221,8 +321,9 @@ function exportMatchesCSV() {
         </div>
         <div className="adminActions">
           <button onClick={seed}>Restaurar horarios base</button>
-<button onClick={exportMatchesCSV}>Exportar CSV</button>
-<Link href="/">Ver web</Link>
+          <button onClick={updateKnockoutsFromGroups}>Actualizar eliminatorias desde grupos</button>
+          <button onClick={exportMatchesCSV}>Exportar CSV</button>
+         <Link href="/">Ver web</Link>
         </div>
       </header>
 
@@ -312,32 +413,35 @@ function exportMatchesCSV() {
   <section className="card">
     <h2>WhatsApp</h2>
     <p className="muted">
-      Contacta rápidamente con cada pareja. El mensaje ya incluye el link de la web.
+      Parejas divididas según su estado en el torneo. El mensaje ya incluye la web y el aviso de revisar horarios.
     </p>
 
-    {cats.map(cat => (
-      <div key={cat} className="wspCategory">
-        <h3>{cat}</h3>
+    {['Campeones', 'Finalistas', 'Semifinalistas', 'Cuartos', 'Fase de grupos'].map(stage => {
+      const list = regs.filter(r => pairStage(r) === stage)
 
-        <div className="wspGrid">
-          {regs
-            .filter(r => r.category === cat)
-            .sort((a,b) => (a.slot || '').localeCompare(b.slot || ''))
-            .map(r => (
+      if (list.length === 0) return null
+
+      return (
+        <div className="wspCategory" key={stage}>
+          <h3>{stage}</h3>
+
+          <div className="wspGrid">
+            {list.map(r => (
               <div className="wspCard" key={r.id || pairName(r)}>
                 <b>{pairName(r)}</b>
                 <span>{r.category} · {r.slot || 'Sin slot'}</span>
                 <small>{r.phone}</small>
 
-                {whatsapp(r.phone)
-                  ? <a className="wsp" href={whatsapp(r.phone)} target="_blank">Abrir WhatsApp</a>
+                {whatsappMsg(r)
+                  ? <a className="wsp" href={whatsappMsg(r)} target="_blank">Abrir WhatsApp</a>
                   : <em>Número no válido</em>
                 }
               </div>
             ))}
+          </div>
         </div>
-      </div>
-    ))}
+      )
+    })}
   </section>
 )}
 

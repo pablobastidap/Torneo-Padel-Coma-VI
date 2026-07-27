@@ -53,34 +53,65 @@ export default function Home() {
   )
 
   const full = cats.every(c => counts[c] >= categoryLimits[c])
-  const availableCats = cats.filter(c => counts[c] < categoryLimits[c])
+  const availableCats = useMemo(
+  () => cats.filter(c => counts[c] < categoryLimits[c]),
+  [counts]
+)
 
-  async function submit(e: any) {
-    e.preventDefault()
+useEffect(() => {
+  if (availableCats.length === 0) return
 
-    if (!supabase) return setMsg('Falta conectar Supabase en .env.local.')
+  const selectedCategory = form.category as Category
 
-    const cat = form.category as Category
-
-    if (counts[cat] >= categoryLimits[cat]) {
-      return setMsg('Esa categoría ya está completa.')
-    }
-
-    const { error } = await supabase
-      .from('registrations')
-      .insert({ ...form, paid: false })
-
-    setMsg(
-      error
-        ? 'No se pudo inscribir. Revisa Supabase.'
-        : 'Inscripción enviada. Recuerda hacer Bizum y estar pendiente de la web.'
-    )
-
-    if (!error) {
-      setForm({ category: availableCats[0] || 'Plata' })
-      load()
-    }
+  if (!availableCats.includes(selectedCategory)) {
+    setForm((current: any) => ({
+      ...current,
+      category: availableCats[0],
+    }))
+    setMsg('')
   }
+}, [availableCats, form.category])
+
+ async function submit(e: any) {
+  e.preventDefault()
+
+  if (!supabase) {
+    setMsg('Falta conectar Supabase en .env.local.')
+    return
+  }
+
+  const cat = form.category as Category
+
+  if (!cat || counts[cat] >= categoryLimits[cat]) {
+    setMsg('Esa categoría ya está completa.')
+    return
+  }
+
+  const { error } = await supabase
+    .from('registrations')
+    .insert({
+      ...form,
+      category: cat,
+      paid: false,
+    })
+
+  if (error) {
+    setMsg('No se pudo inscribir. Revisa Supabase.')
+    return
+  }
+
+  setMsg('Inscripción enviada. Recuerda hacer Bizum y estar pendiente de la web.')
+
+  await load()
+
+  setForm((current: any) => ({
+    ...current,
+    player1: '',
+    player2: '',
+    phone: '',
+    notes: '',
+  }))
+}
 
   return (
     <main>
@@ -187,7 +218,9 @@ export default function Home() {
                     onChange={e => setForm({ ...form, category: e.target.value })}
                   >
                     {availableCats.map(c => (
-                      <option key={c}>{c}</option>
+                      <option key={c} value={c}>
+  {c}
+</option>
                     ))}
                   </select>
                 </label>
@@ -255,4 +288,4 @@ export default function Home() {
       )}
     </main>
   )
-}
+ }
